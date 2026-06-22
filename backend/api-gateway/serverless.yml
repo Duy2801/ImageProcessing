@@ -10,10 +10,21 @@ provider:
   memorySize: 256
   timeout: 30
   environment:
-    AUTH_SERVICE_URL: ${env:AUTH_SERVICE_URL, ''}
-    NOTIFICATION_SERVICE_URL: ${env:NOTIFICATION_SERVICE_URL, ''}
+    AUTH_SERVICE_FUNCTION_NAME: ${env:AUTH_SERVICE_FUNCTION_NAME, 'auth-service-${self:provider.stage}-api'}
+    NOTIFICATION_SAVE_SUBSCRIPTION_FUNCTION_NAME: ${env:NOTIFICATION_SAVE_SUBSCRIPTION_FUNCTION_NAME, 'notification-serverless-${self:provider.stage}-saveSubscription'}
+    NOTIFICATION_GET_SUBSCRIPTIONS_FUNCTION_NAME: ${env:NOTIFICATION_GET_SUBSCRIPTIONS_FUNCTION_NAME, 'notification-serverless-${self:provider.stage}-getSubscriptions'}
     CORS_ORIGIN: ${env:CORS_ORIGIN, '*'}
     PROXY_TIMEOUT_MS: ${env:PROXY_TIMEOUT_MS, '29000'}
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - lambda:InvokeFunction
+          Resource:
+            - !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${env:AUTH_SERVICE_FUNCTION_NAME, 'auth-service-${self:provider.stage}-api'}
+            - !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${env:NOTIFICATION_SAVE_SUBSCRIPTION_FUNCTION_NAME, 'notification-serverless-${self:provider.stage}-saveSubscription'}
+            - !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${env:NOTIFICATION_GET_SUBSCRIPTIONS_FUNCTION_NAME, 'notification-serverless-${self:provider.stage}-getSubscriptions'}
   apiGateway:
     shouldStartNameWithService: true
     binaryMediaTypes:

@@ -43,13 +43,14 @@ provider:
             - sqs:DeleteMessage
             - sqs:GetQueueAttributes
           Resource:
-            - arn:aws:sqs:${self:provider.region}:${aws:accountId}:image-pipeline-app-${self:provider.stage}-notification-queue
+            - !Sub arn:aws:sqs:${AWS::Region}:${AWS::AccountId}:image-pipeline-app-${self:provider.stage}-notification-queue
 
 plugins:
   - serverless-appsync-plugin
 
 custom:
   emailFrom: "nguyenducduy544645@gmail.com" # Set to a verified AWS SES email address
+  accountId: ${env:AWS_ACCOUNT_ID, '000000000000'}
 
 appSync:
   name: notification-appsync-${self:provider.stage}
@@ -85,36 +86,26 @@ functions:
         - "common/**"
     events:
       - sqs:
-          arn: arn:aws:sqs:${self:provider.region}:${aws:accountId}:image-pipeline-app-${self:provider.stage}-notification-queue
+          arn: arn:aws:sqs:${self:provider.region}:${self:custom.accountId}:image-pipeline-app-${self:provider.stage}-notification-queue
           batchSize: 10
 
   saveSubscription:
     handler: functions/subscriptions/index.save
-    description: Lưu cấu hình đăng ký thông báo của người dùng vào DynamoDB
+    description: Internal Lambda to save user notification subscriptions
     timeout: 10
     package:
       patterns:
         - "functions/subscriptions/**"
         - "common/**"
-    events:
-      - http:
-          path: users/{userId}/subscriptions
-          method: post
-          cors: true
 
   getSubscriptions:
     handler: functions/subscriptions/index.get
-    description: Lấy danh sách đăng ký thông báo của người dùng từ DynamoDB
+    description: Internal Lambda to get user notification subscriptions
     timeout: 10
     package:
       patterns:
         - "functions/subscriptions/**"
         - "common/**"
-    events:
-      - http:
-          path: users/{userId}/subscriptions
-          method: get
-          cors: true
 
 resources:
   Resources:
@@ -151,3 +142,11 @@ resources:
           - AttributeName: id
             KeyType: RANGE
         BillingMode: PAY_PER_REQUEST
+
+  Outputs:
+    SaveSubscriptionFunctionName:
+      Description: Internal save subscription Lambda function name
+      Value: !Ref SaveSubscriptionLambdaFunction
+    GetSubscriptionsFunctionName:
+      Description: Internal get subscriptions Lambda function name
+      Value: !Ref GetSubscriptionsLambdaFunction

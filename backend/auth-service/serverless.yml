@@ -16,6 +16,7 @@ provider:
     CORS_ORIGIN: ${env:CORS_ORIGIN, '*'}
     AWS_S3_BUCKET: !Sub image-pipeline-bucket-${self:provider.stage}-${AWS::AccountId}
     PIPELINE_API_URL: ${env:PIPELINE_API_URL, ''}
+    PIPELINE_FUNCTION_NAME: ${env:PIPELINE_FUNCTION_NAME, 'image-pipeline-app-${self:provider.stage}-startPipeline'}
   iam:
     role:
       statements:
@@ -32,6 +33,11 @@ provider:
             - s3:PutObject
           Resource:
             - !Sub arn:aws:s3:::image-pipeline-bucket-${self:provider.stage}-${AWS::AccountId}/originals/*
+        - Effect: Allow
+          Action:
+            - lambda:InvokeFunction
+          Resource:
+            - !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${env:PIPELINE_FUNCTION_NAME, 'image-pipeline-app-${self:provider.stage}-startPipeline'}
 
 package:
   patterns:
@@ -42,16 +48,7 @@ package:
 functions:
   api:
     handler: src/lambda.handler
-    description: Auth API with DynamoDB users and image pipeline proxy
-    events:
-      - http:
-          path: /{proxy+}
-          method: any
-          cors: true
-      - http:
-          path: /
-          method: any
-          cors: true
+    description: Internal auth API Lambda invoked by api-gateway
 
 resources:
   Resources:
@@ -75,3 +72,7 @@ resources:
                 KeyType: HASH
             Projection:
               ProjectionType: ALL
+  Outputs:
+    AuthFunctionName:
+      Description: Internal auth Lambda function name for api-gateway
+      Value: !Ref ApiLambdaFunction

@@ -10,7 +10,7 @@ provider:
 
   # Environment variables for all functions
   environment:
-    S3_BUCKET_NAME: ${self:custom.bucketName}
+    S3_BUCKET_NAME: !Sub image-pipeline-bucket-${self:provider.stage}-${AWS::AccountId}
     RESIZE_QUEUE_URL: !Ref ResizeQueue
     FILTER_QUEUE_URL: !Ref FilterQueue
     WATERMARK_QUEUE_URL: !Ref WatermarkQueue
@@ -27,8 +27,8 @@ provider:
             - s3:PutObject
             - s3:ListBucket
           Resource:
-            - !Sub arn:aws:s3:::${self:custom.bucketName}
-            - !Sub arn:aws:s3:::${self:custom.bucketName}/*
+            - !Sub arn:aws:s3:::image-pipeline-bucket-${self:provider.stage}-${AWS::AccountId}
+            - !Sub arn:aws:s3:::image-pipeline-bucket-${self:provider.stage}-${AWS::AccountId}/*
         - Effect: Allow
           Action:
             - sqs:SendMessage
@@ -42,10 +42,6 @@ provider:
             - !GetAtt CompressQueue.Arn
             - !GetAtt NotificationQueue.Arn
 
-custom:
-  # Globally unique bucket name using AWS Account ID
-  bucketName: image-pipeline-bucket-${self:provider.stage}-${aws:accountId}
-
 package:
   # Package each Lambda individually to keep artifact sizes small
   individually: true
@@ -53,16 +49,11 @@ package:
 functions:
   startPipeline:
     handler: functions/00-start/index.handler
-    description: Receives API requests, validates inputs, and initializes processing pipeline
+    description: Internal Lambda that validates input and initializes processing pipeline
     package:
       patterns:
         - "functions/00-start/**"
         - "common/**"
-    events:
-      - http:
-          path: process
-          method: post
-          cors: true
 
   resize:
     handler: functions/01-resize/index.handler
@@ -122,7 +113,7 @@ resources:
     ImagePipelineBucket:
       Type: AWS::S3::Bucket
       Properties:
-        BucketName: ${self:custom.bucketName}
+        BucketName: !Sub image-pipeline-bucket-${self:provider.stage}-${AWS::AccountId}
         BucketEncryption:
           ServerSideEncryptionConfiguration:
             - ServerSideEncryptionByDefault:
@@ -158,3 +149,8 @@ resources:
       Properties:
         QueueName: ${self:service}-${self:provider.stage}-notification-queue
         VisibilityTimeout: 60
+
+  Outputs:
+    StartPipelineFunctionName:
+      Description: Internal pipeline start Lambda function name
+      Value: !Ref StartPipelineLambdaFunction

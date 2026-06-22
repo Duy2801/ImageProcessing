@@ -15,6 +15,7 @@ const config = {
     bucket: process.env.AWS_S3_BUCKET || process.env.S3_BUCKET_NAME || process.env.S3_BUCKET,
   },
   pipelineApiUrl: process.env.PIPELINE_API_URL || '',
+  pipelineFunctionName: process.env.PIPELINE_FUNCTION_NAME || '',
 };
 
 module.exports = config;

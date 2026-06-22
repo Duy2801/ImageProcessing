@@ -1,18 +1,7 @@
-const DEFAULT_TIMEOUT_MS = 29000;
+const { InvokeCommand, LambdaClient } = require('@aws-sdk/client-lambda');
 
-const hopByHopHeaders = new Set([
-  'connection',
-  'content-length',
-  'expect',
-  'host',
-  'keep-alive',
-  'proxy-authenticate',
-  'proxy-authorization',
-  'te',
-  'trailer',
-  'transfer-encoding',
-  'upgrade',
-]);
+const DEFAULT_TIMEOUT_MS = 29000;
+const lambda = new LambdaClient({});
 
 function corsHeaders() {
   return {
@@ -36,14 +25,7 @@ function jsonResponse(statusCode, body) {
   };
 }
 
-function normalizeBaseUrl(value) {
-  return String(value || '').trim().replace(/\/+$/, '');
-}
-
 function getServiceRoute(path) {
-  const authServiceUrl = normalizeBaseUrl(process.env.AUTH_SERVICE_URL);
-  const notificationServiceUrl = normalizeBaseUrl(process.env.NOTIFICATION_SERVICE_URL);
-
   if (path === '/health') {
     return null;
   }
@@ -51,15 +33,29 @@ function getServiceRoute(path) {
   if (path.startsWith('/api/auth') || path.startsWith('/api/pipeline')) {
     return {
       name: 'auth-service',
-      baseUrl: authServiceUrl,
+      functionName: process.env.AUTH_SERVICE_FUNCTION_NAME,
       targetPath: path,
+    };
+  }
+
+  const subscriptionMatch = path.match(/^\/api\/notifications\/users\/([^/]+)\/subscriptions$/);
+  if (subscriptionMatch) {
+    return {
+      name: 'notification-serverless',
+      targetPath: path.replace(/^\/api\/notifications/, ''),
+      pathParameters: { userId: decodeURIComponent(subscriptionMatch[1]) },
+      resolveFunctionName(httpMethod) {
+        return httpMethod === 'GET'
+          ? process.env.NOTIFICATION_GET_SUBSCRIPTIONS_FUNCTION_NAME
+          : process.env.NOTIFICATION_SAVE_SUBSCRIPTION_FUNCTION_NAME;
+      },
     };
   }
 
   if (path.startsWith('/api/notifications')) {
     return {
       name: 'notification-serverless',
-      baseUrl: notificationServiceUrl,
+      functionName: '',
       targetPath: path.replace(/^\/api\/notifications/, ''),
     };
   }
@@ -67,69 +63,15 @@ function getServiceRoute(path) {
   return undefined;
 }
 
-function queryString(event) {
-  const params = event.multiValueQueryStringParameters || event.queryStringParameters || {};
-  const searchParams = new URLSearchParams();
-
-  Object.entries(params).forEach(([key, value]) => {
-    if (Array.isArray(value)) {
-      value.forEach((item) => searchParams.append(key, item));
-      return;
-    }
-
-    if (value !== undefined && value !== null) {
-      searchParams.append(key, value);
-    }
-  });
-
-  const query = searchParams.toString();
-  return query ? `?${query}` : '';
-}
-
-function requestHeaders(event) {
-  const headers = {};
-
-  Object.entries(event.headers || {}).forEach(([key, value]) => {
-    const lowerKey = key.toLowerCase();
-    if (!hopByHopHeaders.has(lowerKey) && value !== undefined && value !== null) {
-      headers[key] = value;
-    }
-  });
-
-  headers['X-Gateway-Name'] = 'image-processing-api-gateway';
-  headers['X-Forwarded-Path'] = event.path;
-
-  return headers;
-}
-
-function requestBody(event) {
-  if (!event.body) return undefined;
-  return event.isBase64Encoded ? Buffer.from(event.body, 'base64') : event.body;
-}
-
-function responseHeaders(headers) {
-  const output = {};
-
-  headers.forEach((value, key) => {
-    if (!hopByHopHeaders.has(key.toLowerCase())) {
-      output[key] = value;
-    }
-  });
-
-  return {
-    ...output,
-    ...corsHeaders(),
-  };
-}
-
 async function gatewayHealth() {
   return jsonResponse(200, {
     success: true,
     service: 'api-gateway',
     routes: {
-      auth: Boolean(process.env.AUTH_SERVICE_URL),
-      pipeline: Boolean(process.env.AUTH_SERVICE_URL),
-      notifications: Boolean(process.env.NOTIFICATION_SERVICE_URL),
+      auth: Boolean(process.env.AUTH_SERVICE_FUNCTION_NAME),
+      pipeline: Boolean(process.env.AUTH_SERVICE_FUNCTION_NAME),
+      notifications: Boolean(process.env.NOTIFICATION_SAVE_SUBSCRIPTION_FUNCTION_NAME)
+        && Boolean(process.env.NOTIFICATION_GET_SUBSCRIPTIONS_FUNCTION_NAME),
     },
     rateLimit: {
       source: 'aws-api-gateway',
@@ -138,15 +80,47 @@ async function gatewayHealth() {
   });
 }
 
+function serviceEvent(event, route) {
+  return {
+    ...event,
+    path: route.targetPath,
+    resource: route.targetPath,
+    pathParameters: route.pathParameters || event.pathParameters || null,
+    headers: {
+      ...(event.headers || {}),
+      'X-Gateway-Name': 'image-processing-api-gateway',
+      'X-Forwarded-Path': event.path,
+    },
+  };
+}
+
+function normalizeLambdaResponse(payload) {
+  const response = typeof payload === 'string' ? JSON.parse(payload) : payload;
+
+  return {
+    statusCode: response.statusCode || 200,
+    headers: {
+      ...(response.headers || {}),
+      ...corsHeaders(),
+    },
+    isBase64Encoded: Boolean(response.isBase64Encoded),
+    body: response.body || '',
+  };
+}
+
 async function proxyRequest(event, route) {
-  if (!route.baseUrl) {
+  const functionName = route.resolveFunctionName
+    ? route.resolveFunctionName(event.httpMethod)
+    : route.functionName;
+
+  if (!functionName) {
     return jsonResponse(503, {
       success: false,
       error: `${route.name} is not configured`,
       details: {
         missingEnvironmentVariable: route.name === 'notification-serverless'
-          ? 'NOTIFICATION_SERVICE_URL'
-          : 'AUTH_SERVICE_URL',
+          ? 'NOTIFICATION_SAVE_SUBSCRIPTION_FUNCTION_NAME or NOTIFICATION_GET_SUBSCRIPTIONS_FUNCTION_NAME'
+          : 'AUTH_SERVICE_FUNCTION_NAME',
       },
     });
   }
@@ -155,27 +129,23 @@ async function proxyRequest(event, route) {
   const timeout = setTimeout(() => controller.abort(), Number(process.env.PROXY_TIMEOUT_MS || DEFAULT_TIMEOUT_MS));
 
   try {
-    const targetUrl = `${route.baseUrl}${route.targetPath}${queryString(event)}`;
-    const response = await fetch(targetUrl, {
-      method: event.httpMethod,
-      headers: requestHeaders(event),
-      body: ['GET', 'HEAD'].includes(event.httpMethod) ? undefined : requestBody(event),
-      signal: controller.signal,
-    });
+    const response = await lambda.send(new InvokeCommand({
+      FunctionName: functionName,
+      InvocationType: 'RequestResponse',
+      Payload: Buffer.from(JSON.stringify(serviceEvent(event, route))),
+    }), { abortSignal: controller.signal });
 
-    const arrayBuffer = await response.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    const contentType = response.headers.get('content-type') || '';
-    const isTextResponse = contentType.includes('application/json')
-      || contentType.startsWith('text/')
-      || contentType.includes('application/problem+json');
+    const payloadText = Buffer.from(response.Payload || '').toString('utf8');
 
-    return {
-      statusCode: response.status,
-      headers: responseHeaders(response.headers),
-      isBase64Encoded: !isTextResponse,
-      body: isTextResponse ? buffer.toString('utf8') : buffer.toString('base64'),
-    };
+    if (response.FunctionError) {
+      return jsonResponse(502, {
+        success: false,
+        error: `${route.name} Lambda returned an error`,
+        details: payloadText ? JSON.parse(payloadText) : undefined,
+      });
+    }
+
+    return normalizeLambdaResponse(payloadText);
   } catch (error) {
     const isTimeout = error.name === 'AbortError';
     return jsonResponse(isTimeout ? 504 : 502, {

@@ -1,5 +1,6 @@
 const express = require('express');
 const multer = require('multer');
+const { InvokeCommand, LambdaClient } = require('@aws-sdk/client-lambda');
 const { PutObjectCommand, S3Client } = require('@aws-sdk/client-s3');
 const config = require('../config');
 const { requireAuth } = require('../middleware/auth');
@@ -12,6 +13,7 @@ const upload = multer({
   },
 });
 const s3 = new S3Client({ region: config.aws.region });
+const lambda = new LambdaClient({ region: config.aws.region });
 
 const allowedTypes = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
 
@@ -36,10 +38,49 @@ function safeFileName(name) {
 }
 
 async function callPipeline(payload) {
+  if (config.pipelineFunctionName) {
+    const response = await lambda.send(new InvokeCommand({
+      FunctionName: config.pipelineFunctionName,
+      InvocationType: 'RequestResponse',
+      Payload: Buffer.from(JSON.stringify({
+        httpMethod: 'POST',
+        path: '/process',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+        isBase64Encoded: false,
+      })),
+    }));
+
+    const payloadText = Buffer.from(response.Payload || '').toString('utf8');
+
+    if (response.FunctionError) {
+      const err = new Error('Pipeline Lambda failed');
+      err.statusCode = 502;
+      err.details = payloadText ? JSON.parse(payloadText) : undefined;
+      throw err;
+    }
+
+    const lambdaResponse = payloadText ? JSON.parse(payloadText) : {};
+    const body = typeof lambdaResponse.body === 'string'
+      ? JSON.parse(lambdaResponse.body || '{}')
+      : lambdaResponse.body || {};
+
+    if (lambdaResponse.statusCode < 200 || lambdaResponse.statusCode >= 300) {
+      const err = new Error(body.error || body.message || `Pipeline Lambda failed with ${lambdaResponse.statusCode}`);
+      err.statusCode = lambdaResponse.statusCode || 502;
+      err.details = body;
+      throw err;
+    }
+
+    return body;
+  }
+
   if (!config.pipelineApiUrl) {
     return {
       skipped: true,
-      message: 'PIPELINE_API_URL is not configured. S3 upload is ready, but pipeline was not called.',
+      message: 'PIPELINE_FUNCTION_NAME or PIPELINE_API_URL is not configured. S3 upload is ready, but pipeline was not called.',
       requestPayload: payload,
     };
   }
