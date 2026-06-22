@@ -1,0 +1,160 @@
+service: image-pipeline-app
+
+frameworkVersion: "3"
+
+provider:
+  name: aws
+  runtime: nodejs20.x
+  stage: ${opt:stage, 'dev'}
+  region: ${opt:region, 'ap-southeast-2'}
+
+  # Environment variables for all functions
+  environment:
+    S3_BUCKET_NAME: ${self:custom.bucketName}
+    RESIZE_QUEUE_URL: !Ref ResizeQueue
+    FILTER_QUEUE_URL: !Ref FilterQueue
+    WATERMARK_QUEUE_URL: !Ref WatermarkQueue
+    COMPRESS_QUEUE_URL: !Ref CompressQueue
+    NOTIFICATION_QUEUE_URL: !Ref NotificationQueue
+
+  # Least Privilege IAM Roles for S3 and SQS access
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - s3:GetObject
+            - s3:PutObject
+            - s3:ListBucket
+          Resource:
+            - !Sub arn:aws:s3:::${self:custom.bucketName}
+            - !Sub arn:aws:s3:::${self:custom.bucketName}/*
+        - Effect: Allow
+          Action:
+            - sqs:SendMessage
+            - sqs:ReceiveMessage
+            - sqs:DeleteMessage
+            - sqs:GetQueueAttributes
+          Resource:
+            - !GetAtt ResizeQueue.Arn
+            - !GetAtt FilterQueue.Arn
+            - !GetAtt WatermarkQueue.Arn
+            - !GetAtt CompressQueue.Arn
+            - !GetAtt NotificationQueue.Arn
+
+custom:
+  # Globally unique bucket name using AWS Account ID
+  bucketName: image-pipeline-bucket-${self:provider.stage}-${aws:accountId}
+
+package:
+  # Package each Lambda individually to keep artifact sizes small
+  individually: true
+
+functions:
+  startPipeline:
+    handler: functions/00-start/index.handler
+    description: Receives API requests, validates inputs, and initializes processing pipeline
+    package:
+      patterns:
+        - "functions/00-start/**"
+        - "common/**"
+    events:
+      - http:
+          path: process
+          method: post
+          cors: true
+
+  resize:
+    handler: functions/01-resize/index.handler
+    description: Downloads, resizes image using sharp, and forwards to next stage
+    timeout: 30
+    package:
+      patterns:
+        - "functions/01-resize/**"
+        - "common/**"
+    events:
+      - sqs:
+          arn: !GetAtt ResizeQueue.Arn
+          batchSize: 1
+
+  filter:
+    handler: functions/02-filter/index.handler
+    description: Applies filters (blur, sepia, grayscale, brightness) to the image
+    timeout: 30
+    package:
+      patterns:
+        - "functions/02-filter/**"
+        - "common/**"
+    events:
+      - sqs:
+          arn: !GetAtt FilterQueue.Arn
+          batchSize: 1
+
+  watermark:
+    handler: functions/03-watermark/index.handler
+    description: Adds a text or image watermark overlay to the image
+    timeout: 30
+    package:
+      patterns:
+        - "functions/03-watermark/**"
+        - "common/**"
+    events:
+      - sqs:
+          arn: !GetAtt WatermarkQueue.Arn
+          batchSize: 1
+
+  compress:
+    handler: functions/04-compress/index.handler
+    description: Compresses final image and updates notification channel with completion
+    timeout: 30
+    package:
+      patterns:
+        - "functions/04-compress/**"
+        - "common/**"
+    events:
+      - sqs:
+          arn: !GetAtt CompressQueue.Arn
+          batchSize: 1
+
+resources:
+  Resources:
+    # S3 Storage Bucket with Server-Side Encryption
+    ImagePipelineBucket:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: ${self:custom.bucketName}
+        BucketEncryption:
+          ServerSideEncryptionConfiguration:
+            - ServerSideEncryptionByDefault:
+                SSEAlgorithm: AES256
+
+    # SQS Pipeline Queues (Visibility timeout aligned to Lambda timeouts)
+    ResizeQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: ${self:service}-${self:provider.stage}-resize-queue
+        VisibilityTimeout: 60
+
+    FilterQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: ${self:service}-${self:provider.stage}-filter-queue
+        VisibilityTimeout: 60
+
+    WatermarkQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: ${self:service}-${self:provider.stage}-watermark-queue
+        VisibilityTimeout: 60
+
+    CompressQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: ${self:service}-${self:provider.stage}-compress-queue
+        VisibilityTimeout: 60
+
+    NotificationQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: ${self:service}-${self:provider.stage}-notification-queue
+        VisibilityTimeout: 60

@@ -1,0 +1,9 @@
+{
+  "name": "start-pipeline",
+  "version": "1.0.0",
+  "description": "Start the image processing pipeline",
+  "main": "index.js",
+  "dependencies": {
+    "@aws-sdk/client-sqs": "^3.500.0"
+  }
+}

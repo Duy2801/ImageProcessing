@@ -1,0 +1,10 @@
+{
+  "name": "resize-stage",
+  "version": "1.0.0",
+  "description": "Resize stage for image processing pipeline",
+  "main": "index.js",
+  "dependencies": {
+    "@aws-sdk/client-sqs": "^3.500.0",
+    "sharp": "^0.33.2"
+  }
+}

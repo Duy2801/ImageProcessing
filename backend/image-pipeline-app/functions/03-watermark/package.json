@@ -1,0 +1,10 @@
+{
+  "name": "watermark-stage",
+  "version": "1.0.0",
+  "description": "Watermark stage for image processing pipeline",
+  "main": "index.js",
+  "dependencies": {
+    "@aws-sdk/client-sqs": "^3.500.0",
+    "sharp": "^0.33.2"
+  }
+}
