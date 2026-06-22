@@ -1,0 +1,48 @@
+name: Deploy Image Processing Pipeline
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - "image-pipeline-app/**"
+
+jobs:
+  deploy:
+    name: Build & Deploy
+    runs-on: ubuntu-latest
+
+    # Run commands inside the image-pipeline-app subdirectory (for monorepo setup)
+    defaults:
+      run:
+        working-directory: ./image-pipeline-app
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Serverless Framework CLI
+        run: npm install -g serverless@3
+
+      - name: Install Dependencies for all stages
+        run: |
+          for dir in functions/*; do
+            if [ -d "$dir" ] && [ -f "$dir/package.json" ]; then
+              echo "Installing dependencies in $dir..."
+              cd "$dir"
+              npm ci || npm install
+              cd -
+            fi
+          done
+
+      - name: Serverless Deploy to AWS
+        run: serverless deploy --stage prod --conceal
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.PIPELINE_AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.PIPELINE_AWS_SECRET_ACCESS_KEY }}
