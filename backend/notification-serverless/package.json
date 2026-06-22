@@ -1,0 +1,11 @@
+{
+  "name": "notification-serverless",
+  "version": "1.0.0",
+  "description": "Serverless Notification Service using AWS AppSync, SQS, DynamoDB and SES",
+  "main": "functions/sqs-consumer/index.js",
+  "private": true,
+  "devDependencies": {
+    "serverless": "^3.40.0",
+    "serverless-appsync-plugin": "^2.1.0"
+  }
+}

@@ -1,0 +1,36 @@
+import { useEffect } from 'react'
+import { NavLink, Outlet } from 'react-router-dom'
+import { useAuth } from '../../hooks/useAuth'
+
+export function AppLayout() {
+  const { user, accessToken, logout, restoreSession } = useAuth()
+
+  useEffect(() => {
+    if (!accessToken) return
+    restoreSession().catch(() => {})
+  }, [accessToken, restoreSession])
+
+  return (
+    <main className="app-shell">
+      <section className="topbar">
+        <div>
+          <p className="eyebrow">Image Processing Lab</p>
+          <h1>Auth and image pipeline</h1>
+        </div>
+
+        <nav className="app-nav" aria-label="Primary navigation">
+          <NavLink to="/process">Process</NavLink>
+          {!user && <NavLink to="/auth">Login</NavLink>}
+          {user && (
+            <div className="user-menu">
+              <span>{user.name}</span>
+              <button type="button" onClick={logout}>Logout</button>
+            </div>
+          )}
+        </nav>
+      </section>
+
+      <Outlet />
+    </main>
+  )
+}

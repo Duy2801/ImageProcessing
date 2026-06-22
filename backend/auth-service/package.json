@@ -1,0 +1,32 @@
+{
+  "name": "auth-service",
+  "version": "1.0.0",
+  "description": "Authentication and image pipeline test API",
+  "main": "src/server.js",
+  "private": true,
+  "scripts": {
+    "dev": "node --watch src/server.js",
+    "start": "node src/server.js",
+    "package": "serverless package",
+    "deploy": "serverless deploy --stage prod --conceal",
+    "remove": "serverless remove --stage prod"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.954.0",
+    "@aws-sdk/client-dynamodb": "^3.954.0",
+    "@aws-sdk/lib-dynamodb": "^3.954.0",
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^5.2.1",
+    "jsonwebtoken": "^9.0.3",
+    "multer": "^2.0.2",
+    "serverless-http": "^4.0.0"
+  },
+  "devDependencies": {
+    "serverless": "^3.40.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

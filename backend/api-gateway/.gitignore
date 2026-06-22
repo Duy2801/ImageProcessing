@@ -1,0 +1,6 @@
+node_modules
+.serverless
+*.log
+.env
+.env.local
+.data

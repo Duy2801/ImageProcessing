@@ -1,0 +1,42 @@
+name: Deploy Serverless Notification Service
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - "backend/notification-serverless/**"
+
+jobs:
+  deploy:
+    name: Build & Deploy AppSync Notification
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: ./backend/notification-serverless
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Serverless & Plugin dependencies
+        run: npm ci || npm install
+
+      - name: Install SQS Consumer dependencies
+        run: |
+          cd functions/sqs-consumer
+          npm ci || npm install
+          cd -
+
+      - name: Deploy Serverless Service
+        run: npx serverless deploy --stage prod --conceal
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.PIPELINE_AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.PIPELINE_AWS_SECRET_ACCESS_KEY }}

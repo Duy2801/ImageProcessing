@@ -1,0 +1,153 @@
+service: notification-serverless
+
+frameworkVersion: "3"
+
+provider:
+  name: aws
+  runtime: nodejs20.x
+  stage: ${opt:stage, 'dev'}
+  region: ${opt:region, 'ap-southeast-2'}
+
+  # Global environment variables
+  environment:
+    SUBSCRIPTIONS_TABLE: !Ref SubscriptionsTable
+    HISTORY_TABLE: !Ref NotificationHistoryTable
+    APPSYNC_ENDPOINT: ${appsync:url}
+    APPSYNC_API_KEY: ${appsync:apiKey.NotificationApiKey}
+    EMAIL_FROM: ${self:custom.emailFrom}
+    WEBHOOK_RETRY_LIMIT: "3"
+
+  # IAM Roles for least privilege DynamoDB, SES, and SQS access
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - dynamodb:Query
+            - dynamodb:GetItem
+            - dynamodb:PutItem
+            - dynamodb:Scan
+            - dynamodb:UpdateItem
+          Resource:
+            - !GetAtt SubscriptionsTable.Arn
+            - !GetAtt NotificationHistoryTable.Arn
+        - Effect: Allow
+          Action:
+            - ses:SendEmail
+            - ses:SendRawEmail
+          Resource:
+            - "*" # SES email verification check
+        - Effect: Allow
+          Action:
+            - sqs:ReceiveMessage
+            - sqs:DeleteMessage
+            - sqs:GetQueueAttributes
+          Resource:
+            - arn:aws:sqs:${self:provider.region}:${aws:accountId}:image-pipeline-app-${self:provider.stage}-notification-queue
+
+plugins:
+  - serverless-appsync-plugin
+
+custom:
+  emailFrom: "nguyenducduy544645@gmail.com" # Set to a verified AWS SES email address
+
+appSync:
+  name: notification-appsync-${self:provider.stage}
+  authentication:
+    type: API_KEY
+  apiKeys:
+    - name: NotificationApiKey
+      description: "AppSync API Key for Notification AppSync"
+  schema: graphql/schema.graphql
+
+  dataSources:
+    NoneDataSource:
+      type: NONE
+
+  resolvers:
+    Mutation.publishProgress:
+      kind: UNIT
+      dataSource: NoneDataSource
+      request: mapping-templates/publishProgress-request.vtl
+      response: mapping-templates/publishProgress-response.vtl
+
+package:
+  individually: true
+
+functions:
+  sqsConsumer:
+    handler: functions/sqs-consumer/index.handler
+    description: Consumes processing events from SQS NotificationQueue and dispatches them to AppSync and Webhooks/SES
+    timeout: 30
+    package:
+      patterns:
+        - "functions/sqs-consumer/**"
+        - "common/**"
+    events:
+      - sqs:
+          arn: arn:aws:sqs:${self:provider.region}:${aws:accountId}:image-pipeline-app-${self:provider.stage}-notification-queue
+          batchSize: 10
+
+  saveSubscription:
+    handler: functions/subscriptions/index.save
+    description: Lưu cấu hình đăng ký thông báo của người dùng vào DynamoDB
+    timeout: 10
+    package:
+      patterns:
+        - "functions/subscriptions/**"
+        - "common/**"
+    events:
+      - http:
+          path: users/{userId}/subscriptions
+          method: post
+          cors: true
+
+  getSubscriptions:
+    handler: functions/subscriptions/index.get
+    description: Lấy danh sách đăng ký thông báo của người dùng từ DynamoDB
+    timeout: 10
+    package:
+      patterns:
+        - "functions/subscriptions/**"
+        - "common/**"
+    events:
+      - http:
+          path: users/{userId}/subscriptions
+          method: get
+          cors: true
+
+resources:
+  Resources:
+    # Subscriptions Database (DynamoDB)
+    SubscriptionsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:service}-${self:provider.stage}-subscriptions
+        AttributeDefinitions:
+          - AttributeName: userId
+            AttributeType: S
+          - AttributeName: id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: userId
+            KeyType: HASH
+          - AttributeName: id
+            KeyType: RANGE
+        BillingMode: PAY_PER_REQUEST
+
+    # Notification Delivery Logs (DynamoDB)
+    NotificationHistoryTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:service}-${self:provider.stage}-history
+        AttributeDefinitions:
+          - AttributeName: jobId
+            AttributeType: S
+          - AttributeName: id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: jobId
+            KeyType: HASH
+          - AttributeName: id
+            KeyType: RANGE
+        BillingMode: PAY_PER_REQUEST

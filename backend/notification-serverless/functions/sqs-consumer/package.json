@@ -1,0 +1,9 @@
+{
+  "name": "notification-sqs-consumer",
+  "version": "1.0.0",
+  "description": "SQS Consumer to handle processing notification events",
+  "main": "index.js",
+  "dependencies": {
+    "axios": "^1.6.8"
+  }
+}

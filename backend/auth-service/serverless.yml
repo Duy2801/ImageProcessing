@@ -1,0 +1,77 @@
+service: auth-service
+
+frameworkVersion: "3"
+
+provider:
+  name: aws
+  runtime: nodejs20.x
+  stage: ${opt:stage, 'dev'}
+  region: ${opt:region, 'ap-southeast-2'}
+  memorySize: 512
+  timeout: 30
+  environment:
+    USERS_TABLE: !Ref UsersTable
+    JWT_SECRET: ${env:JWT_SECRET, 'change-me-in-env'}
+    JWT_EXPIRES_IN: ${env:JWT_EXPIRES_IN, '7d'}
+    CORS_ORIGIN: ${env:CORS_ORIGIN, '*'}
+    AWS_S3_BUCKET: !Sub image-pipeline-bucket-${self:provider.stage}-${AWS::AccountId}
+    PIPELINE_API_URL: ${env:PIPELINE_API_URL, ''}
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - dynamodb:GetItem
+            - dynamodb:PutItem
+            - dynamodb:Query
+          Resource:
+            - !GetAtt UsersTable.Arn
+            - !Sub "${UsersTable.Arn}/index/*"
+        - Effect: Allow
+          Action:
+            - s3:PutObject
+          Resource:
+            - !Sub arn:aws:s3:::image-pipeline-bucket-${self:provider.stage}-${AWS::AccountId}/originals/*
+
+package:
+  patterns:
+    - "src/**"
+    - "package.json"
+    - "!node_modules/.cache/**"
+
+functions:
+  api:
+    handler: src/lambda.handler
+    description: Auth API with DynamoDB users and image pipeline proxy
+    events:
+      - http:
+          path: /{proxy+}
+          method: any
+          cors: true
+      - http:
+          path: /
+          method: any
+          cors: true
+
+resources:
+  Resources:
+    UsersTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:service}-${self:provider.stage}-users
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: id
+            AttributeType: S
+          - AttributeName: email
+            AttributeType: S
+        KeySchema:
+          - AttributeName: id
+            KeyType: HASH
+        GlobalSecondaryIndexes:
+          - IndexName: email-index
+            KeySchema:
+              - AttributeName: email
+                KeyType: HASH
+            Projection:
+              ProjectionType: ALL

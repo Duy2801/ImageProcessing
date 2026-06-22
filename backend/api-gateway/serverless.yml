@@ -1,0 +1,113 @@
+service: api-gateway
+
+frameworkVersion: "3"
+
+provider:
+  name: aws
+  runtime: nodejs20.x
+  stage: ${opt:stage, 'dev'}
+  region: ${opt:region, 'ap-southeast-2'}
+  memorySize: 256
+  timeout: 30
+  environment:
+    AUTH_SERVICE_URL: ${env:AUTH_SERVICE_URL, ''}
+    NOTIFICATION_SERVICE_URL: ${env:NOTIFICATION_SERVICE_URL, ''}
+    CORS_ORIGIN: ${env:CORS_ORIGIN, '*'}
+    PROXY_TIMEOUT_MS: ${env:PROXY_TIMEOUT_MS, '29000'}
+  apiGateway:
+    shouldStartNameWithService: true
+    binaryMediaTypes:
+      - "multipart/form-data"
+      - "image/*"
+      - "application/octet-stream"
+    apiKeys:
+      - name: ${self:service}-${self:provider.stage}-frontend-key
+        value: ${env:FRONTEND_API_KEY, 'dev-local-api-gateway-key-12345'}
+    usagePlan:
+      quota:
+        limit: ${env:API_QUOTA_LIMIT, '100000'}
+        period: MONTH
+      throttle:
+        burstLimit: ${env:API_BURST_LIMIT, '50'}
+        rateLimit: ${env:API_RATE_LIMIT, '25'}
+
+package:
+  patterns:
+    - "src/**"
+    - "package.json"
+    - "!node_modules/.cache/**"
+
+functions:
+  proxy:
+    handler: src/lambda.handler
+    description: Public gateway facade for auth, image pipeline, and notification APIs
+    events:
+      - http:
+          path: /{proxy+}
+          method: any
+          cors:
+            origin: ${env:CORS_ORIGIN, '*'}
+            headers:
+              - Content-Type
+              - Authorization
+              - X-Api-Key
+              - X-Amz-Date
+              - X-Amz-Security-Token
+            allowCredentials: true
+          private: true
+      - http:
+          path: /
+          method: any
+          cors:
+            origin: ${env:CORS_ORIGIN, '*'}
+            headers:
+              - Content-Type
+              - Authorization
+              - X-Api-Key
+              - X-Amz-Date
+              - X-Amz-Security-Token
+            allowCredentials: true
+          private: true
+
+resources:
+  Resources:
+    Gateway4xxResponse:
+      Type: AWS::ApiGateway::GatewayResponse
+      Properties:
+        ResponseType: DEFAULT_4XX
+        RestApiId:
+          Ref: ApiGatewayRestApi
+        ResponseParameters:
+          gatewayresponse.header.Access-Control-Allow-Origin: "'${env:CORS_ORIGIN, '*'}'"
+          gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Api-Key,X-Amz-Date,X-Amz-Security-Token'"
+          gatewayresponse.header.Access-Control-Allow-Methods: "'GET,POST,PUT,PATCH,DELETE,OPTIONS'"
+        ResponseTemplates:
+          application/json: '{"success":false,"error":"$context.error.messageString","requestId":"$context.requestId"}'
+    Gateway5xxResponse:
+      Type: AWS::ApiGateway::GatewayResponse
+      Properties:
+        ResponseType: DEFAULT_5XX
+        RestApiId:
+          Ref: ApiGatewayRestApi
+        ResponseParameters:
+          gatewayresponse.header.Access-Control-Allow-Origin: "'${env:CORS_ORIGIN, '*'}'"
+          gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Api-Key,X-Amz-Date,X-Amz-Security-Token'"
+          gatewayresponse.header.Access-Control-Allow-Methods: "'GET,POST,PUT,PATCH,DELETE,OPTIONS'"
+        ResponseTemplates:
+          application/json: '{"success":false,"error":"Gateway error","requestId":"$context.requestId"}'
+
+  Outputs:
+    GatewayUrl:
+      Description: Public API Gateway URL for the frontend
+      Value:
+        Fn::Join:
+          - ""
+          - - "https://"
+            - Ref: ApiGatewayRestApi
+            - ".execute-api."
+            - ${self:provider.region}
+            - ".amazonaws.com/"
+            - ${self:provider.stage}
+    FrontendApiKeyName:
+      Description: API key name used by frontend requests
+      Value: ${self:service}-${self:provider.stage}-frontend-key

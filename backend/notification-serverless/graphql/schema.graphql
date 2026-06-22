@@ -1,0 +1,30 @@
+type ProgressEvent {
+  jobId: String!
+  imageId: String!
+  userId: String!
+  eventType: String!
+  status: String!
+  timestamp: String!
+  metadata: String
+}
+
+type Query {
+  getDummy: String
+}
+
+type Mutation {
+  publishProgress(
+    jobId: String!
+    imageId: String!
+    userId: String!
+    eventType: String!
+    status: String!
+    timestamp: String!
+    metadata: String
+  ): ProgressEvent!
+}
+
+type Subscription {
+  onProgressUpdate(userId: String!): ProgressEvent
+    @aws_subscribe(mutations: ["publishProgress"])
+}
