@@ -6,7 +6,7 @@ on:
       - main
       - master
     paths:
-      - "image-pipeline-app/**"
+      - "backend/image-pipeline-app/**"
 
 jobs:
   deploy:
@@ -16,7 +16,7 @@ jobs:
     # Run commands inside the image-pipeline-app subdirectory (for monorepo setup)
     defaults:
       run:
-        working-directory: ./image-pipeline-app
+        working-directory: ./backend/image-pipeline-app
 
     steps:
       - name: Checkout Code
