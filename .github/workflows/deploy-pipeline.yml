@@ -6,7 +6,7 @@ on:
       - main
       - master
     paths:
-      - "backend/image-pipeline-app/**"
+      - "./backend/image-pipeline-app/**"
 
 jobs:
   deploy:
