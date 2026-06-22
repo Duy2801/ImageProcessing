@@ -45,7 +45,7 @@ exports.handler = async (event) => {
         duration: 0
       });
 
-      // Forward directly to next stage
+      // Forward directly to 
       await forwardToNextStage(payload, process.env.FILTER_QUEUE_URL);
       continue;
     }
