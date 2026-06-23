@@ -21,7 +21,7 @@ exports.handler = async (event) => {
       continue;
     }
 
-    const { jobId, imageId, userId, s3Bucket, s3Key, options = {}, logs = [], metadata = {} } = payload;
+    const { jobId, imageId, userId, userEmail, s3Bucket, s3Key, options = {}, logs = [], metadata = {} } = payload;
     logger.info('Processing filter for job', { jobId, imageId });
 
     // Defensive input check
@@ -139,6 +139,7 @@ exports.handler = async (event) => {
         jobId,
         imageId,
         userId,
+        userEmail,
         metadata: {
           filterType,
           width: newMeta.width,
@@ -156,6 +157,7 @@ exports.handler = async (event) => {
         jobId,
         imageId,
         userId,
+        userEmail,
         metadata: {
           error: err.message,
           failedStage: stageName

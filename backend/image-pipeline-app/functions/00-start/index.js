@@ -20,7 +20,7 @@ exports.handler = async (event) => {
       return response(400, { success: false, error: 'Request body is required' });
     }
 
-    const { s3Key, options = {}, userId } = body;
+    const { s3Key, options = {}, userId, userEmail } = body;
 
     // 1. Input Validation
     if (!userId || typeof userId !== 'string') {
@@ -52,6 +52,7 @@ exports.handler = async (event) => {
       jobId,
       imageId,
       userId,
+      userEmail,
       s3Bucket: process.env.S3_BUCKET_NAME,
       s3Key,
       options,
@@ -87,6 +88,7 @@ exports.handler = async (event) => {
         jobId,
         imageId,
         userId,
+        userEmail,
         metadata: {
           originalName: path.basename(s3Key)
         }

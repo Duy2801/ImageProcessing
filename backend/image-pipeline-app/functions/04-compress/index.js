@@ -28,6 +28,7 @@ exports.handler = async (event) => {
       jobId,
       imageId,
       userId,
+      userEmail,
       s3Bucket,
       s3Key,
       options = {},
@@ -137,6 +138,7 @@ exports.handler = async (event) => {
         jobId,
         imageId,
         userId,
+        userEmail,
         metadata: {
           s3Key: resultStorageKey,
           processedKey: outputLocalKey,
@@ -156,6 +158,7 @@ exports.handler = async (event) => {
         jobId,
         imageId,
         userId,
+        userEmail,
         metadata: {
           s3Key: resultStorageKey,
           processedKey: outputLocalKey,

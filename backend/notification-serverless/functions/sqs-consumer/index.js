@@ -47,6 +47,7 @@ exports.handler = async (event) => {
     }
 
     // 3. Dispatch notifications for matching active subscriptions
+    const sentEmailDestinations = new Set();
     for (const sub of subscriptions) {
       if (!sub.isActive) continue;
 
@@ -79,6 +80,7 @@ exports.handler = async (event) => {
           await sendWebhookWithRetry(sub.destination, eventPayload, historyEntry);
         } else if (sub.channel === 'email') {
           await sendEmailViaSES(sub.destination, eventType, data, historyEntry);
+          sentEmailDestinations.add(normalizeEmail(sub.destination));
         } else {
           logger.warn(`Unsupported subscription channel: ${sub.channel}`, { subscriptionId: sub.id });
         }
@@ -86,8 +88,44 @@ exports.handler = async (event) => {
         logger.error(`Failed to dispatch notification for subscription ${sub.id}`, err);
       }
     }
+
+    // Fallback for the common app flow: email the authenticated user when no
+    // explicit email subscription exists yet.
+    if (shouldSendDefaultUserEmail(eventType, data, sentEmailDestinations)) {
+      const destination = data.userEmail;
+      const historyEntry = {
+        id: crypto.randomUUID(),
+        jobId,
+        subscriptionId: 'default-user-email',
+        eventId,
+        status: 'pending',
+        sentAt: new Date().toISOString(),
+        retryCount: 0
+      };
+
+      try {
+        await saveNotificationHistory(historyEntry);
+        await sendEmailViaSES(destination, eventType, data, historyEntry);
+        logger.info('Default user email notification sent', { destination, jobId });
+      } catch (err) {
+        logger.error('Failed to send default user email notification', err, { destination, jobId });
+      }
+    }
   }
 };
+
+function normalizeEmail(email) {
+  return String(email || '').trim().toLowerCase();
+}
+
+function shouldSendDefaultUserEmail(eventType, data, sentEmailDestinations) {
+  if (!['image.completed', 'image.failed'].includes(eventType)) {
+    return false;
+  }
+
+  const destination = normalizeEmail(data.userEmail);
+  return destination && !sentEmailDestinations.has(destination);
+}
 
 /**
  * Publishes progress update to AWS AppSync to trigger GraphQL subscription

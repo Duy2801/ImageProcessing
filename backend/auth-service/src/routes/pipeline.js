@@ -127,6 +127,7 @@ router.post('/process', requireAuth, async (req, res, next) => {
       s3Key,
       options: parseOptions(options),
       userId: req.user.id,
+      userEmail: req.user.email,
     };
 
     const pipeline = await callPipeline(payload);
@@ -170,6 +171,7 @@ router.post('/upload-and-process', requireAuth, upload.single('image'), async (r
       s3Key,
       options: parseOptions(req.body.options),
       userId: req.user.id,
+      userEmail: req.user.email,
     };
     const pipeline = await callPipeline(payload);
 

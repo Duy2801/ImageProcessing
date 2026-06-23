@@ -4,6 +4,8 @@
   "description": "SQS Consumer to handle processing notification events",
   "main": "index.js",
   "dependencies": {
+    "@aws-sdk/client-ses": "^3.600.0",
+    "@aws-sdk/lib-dynamodb": "^3.600.0",
     "axios": "^1.6.8"
   }
 }
