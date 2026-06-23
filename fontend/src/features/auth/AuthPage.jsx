@@ -10,20 +10,6 @@ const initialForm = {
   password: '',
 }
 
-function HealthStatus({ health }) {
-  if (!health) return null
-
-  return (
-    <div className="health-grid">
-      <span className={health.usersTableConfigured || health.authStore === 'local-file' ? 'ok' : 'bad'}>
-        {health.authStore || 'Auth store'}
-      </span>
-      <span className={health.bucketConfigured ? 'ok' : 'bad'}>S3 bucket</span>
-      <span className={health.pipelineConfigured ? 'ok' : 'warn'}>Pipeline URL</span>
-    </div>
-  )
-}
-
 export function AuthPage() {
   const navigate = useNavigate()
   const location = useLocation()
@@ -31,8 +17,6 @@ export function AuthPage() {
   const [mode, setMode] = useState('login')
   const [form, setForm] = useState(initialForm)
   const [apiBaseInput, setApiBaseInput] = useState(getApiBase)
-  const [health, setHealth] = useState(null)
-  const [result, setResult] = useState(null)
   const [notice, setNotice] = useState('')
   const [error, setError] = useState('')
   const [checkingHealth, setCheckingHealth] = useState(false)
@@ -50,12 +34,9 @@ export function AuthPage() {
     setApiBase(apiBaseInput)
 
     try {
-      const data = await checkHealth()
-      setHealth(data)
-      setResult(data)
-      setNotice('Backend dang hoat dong.')
+      await checkHealth()
+      setNotice('Gateway online. Core services reachable.')
     } catch (err) {
-      setHealth(null)
       setError(err.message)
     } finally {
       setCheckingHealth(false)
@@ -66,17 +47,13 @@ export function AuthPage() {
     event.preventDefault()
     setError('')
     setNotice('')
-    setResult(null)
     setApiBase(apiBaseInput)
 
     try {
       const payload = mode === 'register'
         ? form
         : { email: form.email, password: form.password }
-      const data = mode === 'register' ? await register(payload) : await login(payload)
-
-      setResult({ success: true, data })
-      setNotice(mode === 'register' ? 'Tao tai khoan thanh cong.' : 'Dang nhap thanh cong.')
+      await (mode === 'register' ? register(payload) : login(payload))
       navigate(redirectTo, { replace: true })
     } catch (err) {
       setError(err.message)
@@ -84,82 +61,68 @@ export function AuthPage() {
   }
 
   return (
-    <section className="auth-page">
-      <aside className="panel auth-panel">
-        <div className="panel-head">
-          <h2>{mode === 'login' ? 'Login' : 'Register'}</h2>
-          <div className="segmented">
-            <button
-              type="button"
-              className={mode === 'login' ? 'active' : ''}
-              onClick={() => setMode('login')}
-            >
-              Login
-            </button>
-            <button
-              type="button"
-              className={mode === 'register' ? 'active' : ''}
-              onClick={() => setMode('register')}
-            >
-              Register
-            </button>
+    <section className="login-console">
+      <div className="login-hero">
+        <span className="node-pill">Node status: operational</span>
+        <h1>FluxCore Engine</h1>
+        <p>High-performance image processing pipeline for distributed serverless architecture.</p>
+        <div className="metric-grid">
+          <div>
+            <span>Throughput</span>
+            <strong>482 GB/s</strong>
           </div>
+          <div>
+            <span>Latency</span>
+            <strong>12.4ms</strong>
+          </div>
+        </div>
+        <small>Infrastructure status: Global distributor active</small>
+      </div>
+
+      <form className="login-panel" onSubmit={handleSubmit}>
+        <div>
+          <h2>Initialize Session</h2>
+          <p>Enter your engineering credentials to access the core.</p>
+        </div>
+
+        <div className="login-provider-row">
+          <button type="button" onClick={handleHealthCheck} disabled={checkingHealth}>
+            {checkingHealth ? 'Checking...' : 'Gateway'}
+          </button>
+          <button type="button" onClick={() => setMode(mode === 'login' ? 'register' : 'login')}>
+            {mode === 'login' ? 'Create account' : 'Login'}
+          </button>
         </div>
 
         <label>
-          Auth API
+          API Gateway
           <input value={apiBaseInput} onChange={(event) => setApiBaseInput(event.target.value)} />
         </label>
-        <button className="secondary" disabled={checkingHealth || loading} type="button" onClick={handleHealthCheck}>
-          {checkingHealth ? 'Checking...' : 'Check backend'}
+
+        {mode === 'register' && (
+          <label>
+            Node name
+            <input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
+          </label>
+        )}
+
+        <label>
+          Work email
+          <input type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} />
+        </label>
+        <label>
+          Access key
+          <input type="password" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} />
+        </label>
+
+        <button className="login-submit" disabled={loading} type="submit">
+          {loading ? 'Establishing...' : 'Establish Connection'}
         </button>
 
-        <HealthStatus health={health} />
-
-        <form className="form-stack" onSubmit={handleSubmit}>
-          {mode === 'register' && (
-            <label>
-              Name
-              <input
-                value={form.name}
-                onChange={(event) => setForm({ ...form, name: event.target.value })}
-                placeholder="Nguyen Duc Duy"
-              />
-            </label>
-          )}
-          <label>
-            Email
-            <input
-              type="email"
-              value={form.email}
-              onChange={(event) => setForm({ ...form, email: event.target.value })}
-              placeholder="you@example.com"
-            />
-          </label>
-          <label>
-            Password
-            <input
-              type="password"
-              value={form.password}
-              onChange={(event) => setForm({ ...form, password: event.target.value })}
-              placeholder="At least 6 characters"
-            />
-          </label>
-          <button className="primary" disabled={loading} type="submit">
-            {loading ? 'Working...' : mode === 'login' ? 'Login' : 'Create account'}
-          </button>
-        </form>
-      </aside>
-
-      <section className="panel response-panel auth-response">
-        <div className="panel-head">
-          <h2>Response</h2>
-          <span className="status ready">JSON</span>
-        </div>
-        {notice && <div className="notice-box">{notice}</div>}
-        {error && <div className="error-box">{error}</div>}
-        <pre>{JSON.stringify(result || { apiBase: apiBaseInput }, null, 2)}</pre>
-      </section>
+        {notice && <div className="studio-notice">{notice}</div>}
+        {error && <div className="studio-error">{error}</div>}
+        <p className="login-footer">Unauthorized access is prohibited.</p>
+      </form>
     </section>
   )
 }

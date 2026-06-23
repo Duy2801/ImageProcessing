@@ -14,8 +14,8 @@ export function AppLayout() {
     <main className="app-shell">
       <section className="topbar">
         <div>
-          <p className="eyebrow">Image Processing Lab</p>
-          <h1>Auth and image pipeline</h1>
+          <p className="eyebrow">FluxCore Engine</p>
+          <h1>Image Processor Console</h1>
         </div>
 
         <nav className="app-nav" aria-label="Primary navigation">

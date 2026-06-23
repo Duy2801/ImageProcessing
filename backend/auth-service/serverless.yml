@@ -31,8 +31,10 @@ provider:
         - Effect: Allow
           Action:
             - s3:PutObject
+            - s3:GetObject
           Resource:
             - !Sub arn:aws:s3:::image-pipeline-bucket-${self:provider.stage}-${AWS::AccountId}/originals/*
+            - !Sub arn:aws:s3:::image-pipeline-bucket-${self:provider.stage}-${AWS::AccountId}/processed/*
         - Effect: Allow
           Action:
             - lambda:InvokeFunction

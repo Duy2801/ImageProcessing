@@ -1,7 +1,8 @@
 const express = require('express');
 const multer = require('multer');
 const { InvokeCommand, LambdaClient } = require('@aws-sdk/client-lambda');
-const { PutObjectCommand, S3Client } = require('@aws-sdk/client-s3');
+const { GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } = require('@aws-sdk/client-s3');
+const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const config = require('../config');
 const { requireAuth } = require('../middleware/auth');
 
@@ -179,6 +180,50 @@ router.post('/upload-and-process', requireAuth, upload.single('image'), async (r
         s3Key,
         payload,
         pipeline,
+      },
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/download-url', requireAuth, async (req, res, next) => {
+  try {
+    const { s3Key } = req.body || {};
+
+    if (!config.aws.bucket) {
+      return res.status(500).json({ success: false, error: 'AWS_S3_BUCKET or S3_BUCKET_NAME is required' });
+    }
+
+    if (!s3Key || typeof s3Key !== 'string') {
+      return res.status(400).json({ success: false, error: 's3Key is required' });
+    }
+
+    if (!s3Key.startsWith('processed/')) {
+      return res.status(403).json({ success: false, error: 'Only processed images can be exported' });
+    }
+
+    await s3.send(new HeadObjectCommand({
+      Bucket: config.aws.bucket,
+      Key: s3Key,
+    }));
+
+    const url = await getSignedUrl(
+      s3,
+      new GetObjectCommand({
+        Bucket: config.aws.bucket,
+        Key: s3Key,
+      }),
+      { expiresIn: 300 },
+    );
+
+    return res.json({
+      success: true,
+      data: {
+        bucket: config.aws.bucket,
+        s3Key,
+        url,
+        expiresIn: 300,
       },
     });
   } catch (error) {

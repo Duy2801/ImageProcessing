@@ -19,3 +19,11 @@ export function uploadAndProcessImage({ accessToken, file, options }) {
     body,
   })
 }
+
+export function getProcessedImageDownloadUrl({ accessToken, s3Key }) {
+  return apiRequest('/api/pipeline/download-url', {
+    method: 'POST',
+    token: accessToken,
+    body: { s3Key },
+  })
+}
