@@ -1,6 +1,7 @@
 name: Deploy API Gateway
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
