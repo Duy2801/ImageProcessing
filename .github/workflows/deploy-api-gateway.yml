@@ -59,7 +59,31 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.PIPELINE_AWS_SECRET_ACCESS_KEY }}
 
       - name: Deploy API Gateway
-        run: npx serverless deploy --stage prod --region ap-southeast-2 --conceal
+        run: |
+          set +e
+          npx serverless deploy --stage prod --region ap-southeast-2 --conceal
+          DEPLOY_EXIT_CODE=$?
+          set -e
+
+          if [ "$DEPLOY_EXIT_CODE" -eq 0 ]; then
+            exit 0
+          fi
+
+          echo "Deploy failed. Trying to recreate the Serverless deployment bucket and retry once."
+          BUCKET_NAME=$(aws cloudformation describe-stack-resource \
+            --stack-name api-gateway-prod \
+            --logical-resource-id ServerlessDeploymentBucket \
+            --region ap-southeast-2 \
+            --query "StackResourceDetail.PhysicalResourceId" \
+            --output text)
+
+          echo "Recreating missing Serverless deployment bucket: $BUCKET_NAME"
+          aws s3api create-bucket \
+            --bucket "$BUCKET_NAME" \
+            --region ap-southeast-2 \
+            --create-bucket-configuration LocationConstraint=ap-southeast-2 || true
+
+          npx serverless deploy --stage prod --region ap-southeast-2 --conceal
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.PIPELINE_AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.PIPELINE_AWS_SECRET_ACCESS_KEY }}
