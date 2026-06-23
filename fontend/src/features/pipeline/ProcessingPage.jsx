@@ -4,12 +4,92 @@ import { useAuth } from '../../hooks/useAuth'
 import { useObjectUrl } from '../../hooks/useObjectUrl'
 import { buildPipelineOptions, initialPipelineOptions } from '../../untils/pipelineOptions'
 
+function createPipelineSteps({ file, s3Key, options, state = 'idle', pipelineStarted = false }) {
+  const inputDone = state === 'queued' || state === 'failed'
+  const startDone = pipelineStarted && state === 'queued'
+  const stageState = startDone ? 'queued' : 'pending'
+
+  return [
+    {
+      id: 'input',
+      title: file ? 'Upload original image' : 'Use S3 source',
+      detail: file ? file.name : s3Key || 'Waiting for S3 key',
+      status: inputDone ? 'done' : state === 'submitting' ? 'running' : 'pending',
+    },
+    {
+      id: 'start',
+      title: 'Start pipeline',
+      detail: 'Create image processing job and send it to the first queue',
+      status: startDone ? 'done' : inputDone ? 'warning' : 'pending',
+    },
+    {
+      id: 'resize',
+      title: 'Resize',
+      detail: options.resize
+        ? `${options.resize.width || 'auto'} x ${options.resize.height || 'auto'} (${options.resize.fit})`
+        : 'Resize disabled',
+      status: options.resize ? stageState : 'skipped',
+    },
+    {
+      id: 'filter',
+      title: 'Filter',
+      detail: options.filter ? `${options.filter.type} value ${options.filter.value}` : 'Filter disabled',
+      status: options.filter ? stageState : 'skipped',
+    },
+    {
+      id: 'watermark',
+      title: 'Watermark',
+      detail: options.watermark ? `${options.watermark.text} (${options.watermark.position})` : 'Watermark disabled',
+      status: options.watermark ? stageState : 'skipped',
+    },
+    {
+      id: 'compress',
+      title: 'Compress',
+      detail: `${options.compression.format}, quality ${options.compression.quality}`,
+      status: stageState,
+    },
+    {
+      id: 'notify',
+      title: 'Notify progress',
+      detail: 'Send progress events to notification queue',
+      status: stageState,
+    },
+  ]
+}
+
+function getPipelineMeta(data) {
+  const pipelineData = data?.data?.pipeline?.data || data?.data?.pipeline || {}
+
+  return {
+    jobId: pipelineData.jobId || data?.data?.payload?.jobId || '',
+    imageId: pipelineData.imageId || data?.data?.payload?.imageId || '',
+    s3Key: data?.data?.s3Key || data?.data?.payload?.s3Key || '',
+    skipped: Boolean(data?.data?.pipeline?.skipped),
+  }
+}
+
+function StepBadge({ status }) {
+  const labels = {
+    pending: 'Pending',
+    running: 'Running',
+    done: 'Done',
+    queued: 'Queued',
+    skipped: 'Skipped',
+    warning: 'Waiting',
+    failed: 'Failed',
+  }
+
+  return <span className={`step-badge ${status}`}>{labels[status] || status}</span>
+}
+
 export function ProcessingPage() {
   const { accessToken } = useAuth()
   const [file, setFile] = useState(null)
   const [manualS3Key, setManualS3Key] = useState('')
   const [optionsForm, setOptionsForm] = useState(initialPipelineOptions)
   const [result, setResult] = useState(null)
+  const [steps, setSteps] = useState([])
+  const [history, setHistory] = useState([])
   const [notice, setNotice] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -26,18 +106,59 @@ export function ProcessingPage() {
     setError('')
     setNotice('')
     setResult(null)
+    setSteps(createPipelineSteps({
+      file,
+      s3Key: manualS3Key,
+      options: optionsPreview,
+      state: 'submitting',
+    }))
 
     try {
       const data = file
         ? await uploadAndProcessImage({ accessToken, file, options: optionsPreview })
         : await processExistingImage({ accessToken, s3Key: manualS3Key, options: optionsPreview })
+      const meta = getPipelineMeta(data)
+      const pipelineStarted = !meta.skipped
+      const completedSteps = createPipelineSteps({
+        file,
+        s3Key: meta.s3Key || manualS3Key,
+        options: optionsPreview,
+        state: 'queued',
+        pipelineStarted,
+      }).map((step) => {
+        if (meta.skipped && step.id !== 'input') {
+          return {
+            ...step,
+            status: step.status === 'skipped' ? 'skipped' : 'warning',
+          }
+        }
+
+        return step
+      })
 
       setResult(data)
+      setSteps(completedSteps)
+      setHistory((current) => [
+        {
+          id: `${Date.now()}`,
+          createdAt: new Date().toLocaleString(),
+          jobId: meta.jobId,
+          imageId: meta.imageId,
+          s3Key: meta.s3Key || manualS3Key,
+          fileName: file?.name || '',
+          status: meta.skipped ? 'Pipeline not configured' : 'Queued successfully',
+          steps: completedSteps,
+        },
+        ...current,
+      ].slice(0, 5))
       setNotice(data.data?.pipeline?.skipped
-        ? 'Upload thanh cong. Pipeline chua duoc goi vi backend chua cau hinh PIPELINE_API_URL.'
+        ? 'Anh da duoc nhan, nhung pipeline chua duoc cau hinh de chay tiep.'
         : 'Da gui job xu ly anh thanh cong.')
     } catch (err) {
       setError(err.message)
+      setSteps((current) => current.map((step) => (
+        step.status === 'running' ? { ...step, status: 'failed' } : step
+      )))
     } finally {
       setLoading(false)
     }
@@ -199,6 +320,54 @@ export function ProcessingPage() {
             {loading ? 'Sending job...' : file ? 'Upload and process' : 'Start process'}
           </button>
         </form>
+      </section>
+
+      <section className="panel progress-panel">
+        <div className="panel-head">
+          <h2>Processing steps</h2>
+          <span className={loading ? 'status' : 'status ready'}>{loading ? 'Sending' : 'Ready'}</span>
+        </div>
+
+        <div className="step-list">
+          {(steps.length ? steps : createPipelineSteps({
+            file,
+            s3Key: manualS3Key,
+            options: optionsPreview,
+          })).map((step) => (
+            <div className={`step-item ${step.status}`} key={step.id}>
+              <div className="step-marker" />
+              <div>
+                <div className="step-title-row">
+                  <strong>{step.title}</strong>
+                  <StepBadge status={step.status} />
+                </div>
+                <p>{step.detail}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {history.length > 0 && (
+          <div className="history-list">
+            <h2>Recent jobs</h2>
+            {history.map((item) => (
+              <article className="history-item" key={item.id}>
+                <div>
+                  <strong>{item.fileName || item.s3Key}</strong>
+                  <span>{item.createdAt}</span>
+                </div>
+                <span className="status ready">{item.status}</span>
+                {(item.jobId || item.imageId) && (
+                  <p>
+                    {item.jobId && `Job: ${item.jobId}`}
+                    {item.jobId && item.imageId && ' | '}
+                    {item.imageId && `Image: ${item.imageId}`}
+                  </p>
+                )}
+              </article>
+            ))}
+          </div>
+        )}
       </section>
 
       <section className="panel response-panel">

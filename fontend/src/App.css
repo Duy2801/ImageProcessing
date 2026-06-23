@@ -72,7 +72,7 @@ h2 {
 }
 
 .process-workspace {
-  grid-template-columns: minmax(520px, 1fr) 420px;
+  grid-template-columns: minmax(440px, 1fr) minmax(340px, 420px) 420px;
 }
 
 .auth-page {
@@ -91,6 +91,7 @@ h2 {
 
 .auth-panel,
 .pipeline-panel,
+.progress-panel,
 .response-panel {
   padding: 18px;
 }
@@ -345,6 +346,174 @@ button:focus-visible {
   display: flex;
   flex-direction: column;
   min-height: 560px;
+}
+
+.progress-panel {
+  display: grid;
+  align-content: start;
+  gap: 18px;
+}
+
+.step-list {
+  display: grid;
+  gap: 10px;
+}
+
+.step-item {
+  position: relative;
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #d8dee8;
+  border-radius: 8px;
+  background: #fbfcfe;
+}
+
+.step-item.done,
+.step-item.queued {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+}
+
+.step-item.running {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+}
+
+.step-item.warning {
+  border-color: #fde68a;
+  background: #fffbeb;
+}
+
+.step-item.failed {
+  border-color: #fecaca;
+  background: #fef2f2;
+}
+
+.step-item.skipped {
+  color: #64748b;
+  background: #f8fafc;
+}
+
+.step-marker {
+  width: 12px;
+  height: 12px;
+  margin-top: 4px;
+  border: 2px solid #94a3b8;
+  border-radius: 999px;
+  background: #ffffff;
+}
+
+.step-item.done .step-marker,
+.step-item.queued .step-marker {
+  border-color: #16a34a;
+  background: #16a34a;
+}
+
+.step-item.running .step-marker {
+  border-color: #2563eb;
+  background: #2563eb;
+}
+
+.step-item.warning .step-marker {
+  border-color: #d97706;
+  background: #d97706;
+}
+
+.step-item.failed .step-marker {
+  border-color: #dc2626;
+  background: #dc2626;
+}
+
+.step-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.step-title-row strong {
+  min-width: 0;
+  color: #111827;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.step-item p,
+.history-item p {
+  margin: 6px 0 0;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.step-badge {
+  flex: 0 0 auto;
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  color: #475569;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.step-badge.done,
+.step-badge.queued {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.step-badge.running {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.step-badge.warning {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.step-badge.failed {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.history-list {
+  display: grid;
+  gap: 10px;
+  padding-top: 2px;
+}
+
+.history-list h2 {
+  font-size: 16px;
+}
+
+.history-item {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid #d8dee8;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.history-item > div {
+  display: grid;
+  gap: 3px;
+}
+
+.history-item strong {
+  color: #111827;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.history-item span:not(.status) {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .error-box {
