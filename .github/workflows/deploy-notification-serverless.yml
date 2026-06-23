@@ -35,6 +35,32 @@ jobs:
           npm ci || npm install
           cd -
 
+      - name: Restore Serverless deployment bucket if missing
+        run: |
+          BUCKET_NAME=$(aws cloudformation describe-stack-resource \
+            --stack-name notification-serverless-prod \
+            --logical-resource-id ServerlessDeploymentBucket \
+            --region ap-southeast-2 \
+            --query "StackResourceDetail.PhysicalResourceId" \
+            --output text 2>/dev/null || true)
+
+          if [ -n "$BUCKET_NAME" ] && [ "$BUCKET_NAME" != "None" ]; then
+            if ! aws s3api head-bucket --bucket "$BUCKET_NAME" 2>/dev/null; then
+              echo "Recreating missing Serverless deployment bucket: $BUCKET_NAME"
+              aws s3api create-bucket \
+                --bucket "$BUCKET_NAME" \
+                --region ap-southeast-2 \
+                --create-bucket-configuration LocationConstraint=ap-southeast-2
+            else
+              echo "Serverless deployment bucket exists: $BUCKET_NAME"
+            fi
+          else
+            echo "No existing ServerlessDeploymentBucket found for notification-serverless-prod."
+          fi
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.PIPELINE_AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.PIPELINE_AWS_SECRET_ACCESS_KEY }}
+
       - name: Deploy Serverless Service
         run: npx serverless deploy --stage prod --conceal
         env:
