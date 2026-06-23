@@ -1,6 +1,3 @@
-/**
- * Simple structured logger helper formatting console logs for AWS CloudWatch
- */
 const logger = {
   info: (message, meta = {}) => {
     console.log(JSON.stringify({ level: 'INFO', message, timestamp: new Date().toISOString(), ...meta }));

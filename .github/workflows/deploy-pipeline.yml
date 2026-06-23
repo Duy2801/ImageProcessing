@@ -8,6 +8,7 @@ on:
       - master
     paths:
       - "backend/image-pipeline-app/**"
+      - ".github/workflows/deploy-pipeline.yml"
 
 jobs:
   deploy:
@@ -85,7 +86,34 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.PIPELINE_AWS_SECRET_ACCESS_KEY }}
 
       - name: Serverless Deploy to AWS
-        run: serverless deploy --stage prod --region ap-southeast-2 --conceal
+        run: |
+          set +e
+          serverless deploy --stage prod --region ap-southeast-2 --conceal
+          DEPLOY_EXIT_CODE=$?
+          set -e
+
+          if [ "$DEPLOY_EXIT_CODE" -eq 0 ]; then
+            exit 0
+          fi
+
+          echo "Deploy failed. Recreating missing stack buckets and retrying once."
+
+          for logical_id in ServerlessDeploymentBucket ImagePipelineBucket; do
+            BUCKET_NAME=$(aws cloudformation describe-stack-resource \
+              --stack-name image-pipeline-app-prod \
+              --logical-resource-id "$logical_id" \
+              --region ap-southeast-2 \
+              --query "StackResourceDetail.PhysicalResourceId" \
+              --output text)
+
+            echo "Recreating bucket if missing: $logical_id -> $BUCKET_NAME"
+            aws s3api create-bucket \
+              --bucket "$BUCKET_NAME" \
+              --region ap-southeast-2 \
+              --create-bucket-configuration LocationConstraint=ap-southeast-2 || true
+          done
+
+          serverless deploy --stage prod --region ap-southeast-2 --conceal
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.PIPELINE_AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.PIPELINE_AWS_SECRET_ACCESS_KEY }}
