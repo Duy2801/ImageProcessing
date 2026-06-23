@@ -8,7 +8,6 @@ provider:
   stage: ${opt:stage, 'dev'}
   region: ${opt:region, 'ap-southeast-2'}
 
-  # Global environment variables
   environment:
     SUBSCRIPTIONS_TABLE: !Ref SubscriptionsTable
     HISTORY_TABLE: !Ref NotificationHistoryTable
@@ -17,7 +16,6 @@ provider:
     EMAIL_FROM: ${self:custom.emailFrom}
     WEBHOOK_RETRY_LIMIT: "3"
 
-  # IAM Roles for least privilege DynamoDB, SES, and SQS access
   iam:
     role:
       statements:
@@ -36,21 +34,21 @@ provider:
             - ses:SendEmail
             - ses:SendRawEmail
           Resource:
-            - "*" # SES email verification check
+            - "*"
         - Effect: Allow
           Action:
             - sqs:ReceiveMessage
             - sqs:DeleteMessage
             - sqs:GetQueueAttributes
           Resource:
-            - !Sub arn:aws:sqs:${AWS::Region}:${AWS::AccountId}:image-pipeline-app-${self:provider.stage}-notification-queue
+            - arn:aws:sqs:${self:provider.region}:${self:custom.accountId}:image-pipeline-app-${self:provider.stage}-notification-queue
 
 plugins:
   - serverless-appsync-plugin
 
 custom:
-  emailFrom: "nguyenducduy544645@gmail.com" # Set to a verified AWS SES email address
   accountId: ${env:AWS_ACCOUNT_ID, '000000000000'}
+  emailFrom: ${env:EMAIL_FROM, 'hungzazed01@gmail.com'}
 
 appSync:
   name: notification-appsync-${self:provider.stage}
@@ -78,7 +76,7 @@ package:
 functions:
   sqsConsumer:
     handler: functions/sqs-consumer/index.handler
-    description: Consumes processing events from SQS NotificationQueue and dispatches them to AppSync and Webhooks/SES
+    description: Consumes processing events from SQS and dispatches progress notifications
     timeout: 30
     package:
       patterns:
@@ -109,11 +107,11 @@ functions:
 
 resources:
   Resources:
-    # Subscriptions Database (DynamoDB)
     SubscriptionsTable:
       Type: AWS::DynamoDB::Table
       Properties:
         TableName: ${self:service}-${self:provider.stage}-subscriptions
+        BillingMode: PAY_PER_REQUEST
         AttributeDefinitions:
           - AttributeName: userId
             AttributeType: S
@@ -124,13 +122,12 @@ resources:
             KeyType: HASH
           - AttributeName: id
             KeyType: RANGE
-        BillingMode: PAY_PER_REQUEST
 
-    # Notification Delivery Logs (DynamoDB)
     NotificationHistoryTable:
       Type: AWS::DynamoDB::Table
       Properties:
         TableName: ${self:service}-${self:provider.stage}-history
+        BillingMode: PAY_PER_REQUEST
         AttributeDefinitions:
           - AttributeName: jobId
             AttributeType: S
@@ -141,7 +138,6 @@ resources:
             KeyType: HASH
           - AttributeName: id
             KeyType: RANGE
-        BillingMode: PAY_PER_REQUEST
 
   Outputs:
     SaveSubscriptionFunctionName:

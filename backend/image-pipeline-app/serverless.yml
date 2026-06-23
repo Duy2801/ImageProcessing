@@ -8,7 +8,6 @@ provider:
   stage: ${opt:stage, 'dev'}
   region: ${opt:region, 'ap-southeast-2'}
 
-  # Environment variables for all functions
   environment:
     S3_BUCKET_NAME: !Sub image-pipeline-bucket-${self:provider.stage}-${AWS::AccountId}
     RESIZE_QUEUE_URL: !Ref ResizeQueue
@@ -17,7 +16,6 @@ provider:
     COMPRESS_QUEUE_URL: !Ref CompressQueue
     NOTIFICATION_QUEUE_URL: !Ref NotificationQueue
 
-  # Least Privilege IAM Roles for S3 and SQS access
   iam:
     role:
       statements:
@@ -43,7 +41,6 @@ provider:
             - !GetAtt NotificationQueue.Arn
 
 package:
-  # Package each Lambda individually to keep artifact sizes small
   individually: true
 
 functions:
@@ -70,7 +67,7 @@ functions:
 
   filter:
     handler: functions/02-filter/index.handler
-    description: Applies filters (blur, sepia, grayscale, brightness) to the image
+    description: Applies filters to the image
     timeout: 30
     package:
       patterns:
@@ -109,7 +106,6 @@ functions:
 
 resources:
   Resources:
-    # S3 Storage Bucket with Server-Side Encryption
     ImagePipelineBucket:
       Type: AWS::S3::Bucket
       Properties:
@@ -119,7 +115,6 @@ resources:
             - ServerSideEncryptionByDefault:
                 SSEAlgorithm: AES256
 
-    # SQS Pipeline Queues (Visibility timeout aligned to Lambda timeouts)
     ResizeQueue:
       Type: AWS::SQS::Queue
       Properties:
