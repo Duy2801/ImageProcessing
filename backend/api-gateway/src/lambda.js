@@ -94,13 +94,32 @@ function serviceEvent(event, route) {
   };
 }
 
+function stripUpstreamManagedHeaders(headers = {}) {
+  const blockedHeaders = new Set([
+    'access-control-allow-origin',
+    'access-control-allow-credentials',
+    'access-control-allow-headers',
+    'access-control-allow-methods',
+    'access-control-max-age',
+    'x-content-type-options',
+  ]);
+
+  return Object.entries(headers).reduce((cleanHeaders, [key, value]) => {
+    if (!blockedHeaders.has(key.toLowerCase())) {
+      cleanHeaders[key] = value;
+    }
+
+    return cleanHeaders;
+  }, {});
+}
+
 function normalizeLambdaResponse(payload) {
   const response = typeof payload === 'string' ? JSON.parse(payload) : payload;
 
   return {
     statusCode: response.statusCode || 200,
     headers: {
-      ...(response.headers || {}),
+      ...stripUpstreamManagedHeaders(response.headers),
       ...corsHeaders(),
     },
     isBase64Encoded: Boolean(response.isBase64Encoded),
