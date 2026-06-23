@@ -93,10 +93,9 @@ export function ProcessingPage() {
   const [manualS3Key, setManualS3Key] = useState('')
   const [optionsForm, setOptionsForm] = useState(initialPipelineOptions)
   const [stages, setStages] = useState(() => makeInitialStages(buildPipelineOptions(initialPipelineOptions)))
-  const [result, setResult] = useState(null)
   const [jobMeta, setJobMeta] = useState({ jobId: '', imageId: '', sourceKey: '', outputKey: '' })
   const [outputUrl, setOutputUrl] = useState('')
-  const [logs, setLogs] = useState([])
+  const [activity, setActivity] = useState('Ready to start a new image pipeline.')
   const [notice, setNotice] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -104,15 +103,7 @@ export function ProcessingPage() {
   const optionsPreview = useMemo(() => buildPipelineOptions(optionsForm), [optionsForm])
 
   function appendLog(level, message) {
-    setLogs((current) => [
-      {
-        id: `${Date.now()}-${Math.random()}`,
-        at: new Date().toLocaleTimeString(),
-        level,
-        message,
-      },
-      ...current,
-    ].slice(0, 80))
+    setActivity(`[${level}] ${message}`)
   }
 
   const applyProgressEvent = useCallback((event) => {
@@ -160,7 +151,7 @@ export function ProcessingPage() {
     setLoading(true)
     setError('')
     setNotice('')
-    setResult(null)
+    setActivity('Preparing upload and pipeline request...')
     setOutputUrl('')
     setJobMeta({ jobId: '', imageId: '', sourceKey: '', outputKey: '' })
     setStages(makeInitialStages(optionsPreview).map((stage) => (
@@ -174,7 +165,6 @@ export function ProcessingPage() {
         : await processExistingImage({ accessToken, s3Key: manualS3Key, options: optionsPreview })
       const meta = metadataFromResponse(data)
 
-      setResult(data)
       setJobMeta((current) => ({ ...current, ...meta }))
       setStages((current) => current.map((stage) => {
         if (stage.id === 'start') return { ...stage, status: 'done', detail: 'Queued' }
@@ -292,6 +282,13 @@ export function ProcessingPage() {
 
         <form className="studio-grid" onSubmit={handleSubmit}>
           <section className="studio-card stage-card">
+            <div className="studio-card-head">
+              <h3>Pipeline</h3>
+              <div>
+                <span>{jobMeta.jobId ? `Job: ${jobMeta.jobId}` : 'No active job'}</span>
+                <span>{activity}</span>
+              </div>
+            </div>
             <div className="studio-stage-line">
               {stages.map((stage) => <StageNode stage={stage} key={stage.id} />)}
             </div>
@@ -378,35 +375,9 @@ export function ProcessingPage() {
             <button className="studio-primary" disabled={loading || (!file && !manualS3Key)} type="submit">
               {loading ? 'Running pipeline...' : 'Start Processing'}
             </button>
-          </section>
-
-          <section className="studio-card log-card">
-            <div className="studio-card-head">
-              <h3>Live CloudWatch Stream</h3>
-              <div>
-                <button type="button" onClick={() => setLogs([])}>Clear</button>
-                <button type="button" onClick={handleExport} disabled={!jobMeta.outputKey}>Download</button>
-              </div>
-            </div>
             {notice && <div className="studio-notice">{notice}</div>}
             {error && <div className="studio-error">{error}</div>}
             {realtime.error && <div className="studio-error">{realtime.error}</div>}
-            <div className="studio-log">
-              {logs.length === 0 && <p>[ idle ] Waiting for pipeline activity...</p>}
-              {logs.map((log) => (
-                <p key={log.id}>
-                  <span>{log.at}</span> <b>[{log.level}]</b> {log.message}
-                </p>
-              ))}
-            </div>
-          </section>
-
-          <section className="studio-card response-card">
-            <div className="studio-card-head">
-              <h3>Payload</h3>
-              <span>JSON</span>
-            </div>
-            <pre>{JSON.stringify(result || { optionsPreview, jobMeta }, null, 2)}</pre>
           </section>
         </form>
       </section>

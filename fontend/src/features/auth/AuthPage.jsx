@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
-import { checkHealth } from '../../api/healthApi'
 import { useAuth } from '../../hooks/useAuth'
 import { getApiBase, setApiBase } from '../../untils/storage'
 
@@ -16,31 +15,14 @@ export function AuthPage() {
   const { user, status, login, register } = useAuth()
   const [mode, setMode] = useState('login')
   const [form, setForm] = useState(initialForm)
-  const [apiBaseInput, setApiBaseInput] = useState(getApiBase)
+  const [apiBaseInput] = useState(getApiBase)
   const [notice, setNotice] = useState('')
   const [error, setError] = useState('')
-  const [checkingHealth, setCheckingHealth] = useState(false)
   const loading = status === 'loading'
   const redirectTo = location.state?.from?.pathname || '/process'
 
   if (user) {
     return <Navigate to={redirectTo} replace />
-  }
-
-  async function handleHealthCheck() {
-    setCheckingHealth(true)
-    setError('')
-    setNotice('')
-    setApiBase(apiBaseInput)
-
-    try {
-      await checkHealth()
-      setNotice('Gateway online. Core services reachable.')
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setCheckingHealth(false)
-    }
   }
 
   async function handleSubmit(event) {
@@ -63,41 +45,54 @@ export function AuthPage() {
   return (
     <section className="login-console">
       <div className="login-hero">
-        <span className="node-pill">Node status: operational</span>
-        <h1>FluxCore Engine</h1>
-        <p>High-performance image processing pipeline for distributed serverless architecture.</p>
+        <div className="login-brandmark">FC</div>
+        <div className="login-copy">
+          <span className="node-pill">Serverless image pipeline</span>
+          <h1>FluxCore Engine</h1>
+          <p>Authenticate, upload, transform, track and export images through a distributed AWS processing core.</p>
+        </div>
+        <div className="pipeline-preview" aria-hidden="true">
+          <div className="preview-node active">S</div>
+          <span />
+          <div className="preview-node active">R</div>
+          <span />
+          <div className="preview-node">F</div>
+          <span />
+          <div className="preview-node">W</div>
+          <span />
+          <div className="preview-node">S3</div>
+        </div>
         <div className="metric-grid">
           <div>
-            <span>Throughput</span>
-            <strong>482 GB/s</strong>
+            <span>Runtime</span>
+            <strong>Lambda</strong>
           </div>
           <div>
-            <span>Latency</span>
-            <strong>12.4ms</strong>
+            <span>Queue</span>
+            <strong>SQS</strong>
+          </div>
+          <div>
+            <span>Storage</span>
+            <strong>S3</strong>
           </div>
         </div>
-        <small>Infrastructure status: Global distributor active</small>
       </div>
 
       <form className="login-panel" onSubmit={handleSubmit}>
-        <div>
-          <h2>Initialize Session</h2>
-          <p>Enter your engineering credentials to access the core.</p>
+        <div className="login-panel-head">
+          <span>Secure access</span>
+          <h2>{mode === 'login' ? 'Welcome back' : 'Create account'}</h2>
+          <p>{mode === 'login' ? 'Sign in to continue processing images.' : 'Register a workspace user for the pipeline.'}</p>
         </div>
 
-        <div className="login-provider-row">
-          <button type="button" onClick={handleHealthCheck} disabled={checkingHealth}>
-            {checkingHealth ? 'Checking...' : 'Gateway'}
+        <div className="auth-tabs" role="tablist" aria-label="Authentication mode">
+          <button type="button" className={mode === 'login' ? 'active' : ''} onClick={() => setMode('login')}>
+            Login
           </button>
-          <button type="button" onClick={() => setMode(mode === 'login' ? 'register' : 'login')}>
-            {mode === 'login' ? 'Create account' : 'Login'}
+          <button type="button" className={mode === 'register' ? 'active' : ''} onClick={() => setMode('register')}>
+            Register
           </button>
         </div>
-
-        <label>
-          API Gateway
-          <input value={apiBaseInput} onChange={(event) => setApiBaseInput(event.target.value)} />
-        </label>
 
         {mode === 'register' && (
           <label>
@@ -116,12 +111,12 @@ export function AuthPage() {
         </label>
 
         <button className="login-submit" disabled={loading} type="submit">
-          {loading ? 'Establishing...' : 'Establish Connection'}
+          {loading ? 'Connecting...' : mode === 'login' ? 'Sign in' : 'Create account'}
         </button>
 
         {notice && <div className="studio-notice">{notice}</div>}
         {error && <div className="studio-error">{error}</div>}
-        <p className="login-footer">Unauthorized access is prohibited.</p>
+        <p className="login-footer">Protected workspace for authenticated operators only.</p>
       </form>
     </section>
   )
