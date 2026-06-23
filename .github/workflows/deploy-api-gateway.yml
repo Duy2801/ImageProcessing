@@ -1,4 +1,4 @@
-name: Deploy Auth Service
+name: Deploy API Gateway
 
 on:
   push:
@@ -6,17 +6,17 @@ on:
       - main
       - master
     paths:
-      - "backend/auth-service/**"
-      - ".github/workflows/deploy-auth-service.yml"
+      - "backend/api-gateway/**"
+      - ".github/workflows/deploy-api-gateway.yml"
 
 jobs:
   deploy:
-    name: Build & Deploy Auth
+    name: Build & Deploy API Gateway
     runs-on: ubuntu-latest
 
     defaults:
       run:
-        working-directory: backend/auth-service
+        working-directory: backend/api-gateway
 
     steps:
       - name: Checkout Code
@@ -27,16 +27,18 @@ jobs:
         with:
           node-version: 20
           cache: npm
-          cache-dependency-path: backend/auth-service/package-lock.json
+          cache-dependency-path: backend/api-gateway/package-lock.json
 
       - name: Install Dependencies
         run: npm ci
 
-      - name: Deploy Auth Service
+      - name: Deploy API Gateway
         run: npx serverless deploy --stage prod --region ap-southeast-2 --conceal
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.PIPELINE_AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.PIPELINE_AWS_SECRET_ACCESS_KEY }}
-          JWT_SECRET: ${{ secrets.JWT_SECRET }}
-          PIPELINE_FUNCTION_NAME: image-pipeline-app-prod-startPipeline
+          AUTH_SERVICE_FUNCTION_NAME: auth-service-prod-api
+          NOTIFICATION_SAVE_SUBSCRIPTION_FUNCTION_NAME: notification-serverless-prod-saveSubscription
+          NOTIFICATION_GET_SUBSCRIPTIONS_FUNCTION_NAME: notification-serverless-prod-getSubscriptions
+          FRONTEND_API_KEY: ${{ secrets.FRONTEND_API_KEY }}
           CORS_ORIGIN: ${{ secrets.CORS_ORIGIN }}
