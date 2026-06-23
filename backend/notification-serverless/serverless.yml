@@ -47,8 +47,8 @@ plugins:
   - serverless-appsync-plugin
 
 custom:
-  accountId: ${env:AWS_ACCOUNT_ID, '000000000000'}
-  emailFrom: ${env:EMAIL_FROM, 'hungzazed01@gmail.com'}
+  accountId: ${aws:accountId}
+  emailFrom: ${env:EMAIL_FROM, 'nguyenducduy544645@gmail.com'}
 
 appSync:
   name: notification-appsync-${self:provider.stage}
