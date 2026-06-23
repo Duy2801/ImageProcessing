@@ -57,9 +57,14 @@ function finalExtension(options) {
   return format === 'jpeg' ? 'jpg' : format
 }
 
-function finalOutputKey(jobId, options) {
+function processedOutputKey(jobId, options) {
   if (!jobId) return ''
   return `processed/${jobId}/final.${finalExtension(options)}`
+}
+
+function resultOutputKey(userId, jobId, options) {
+  if (!userId || !jobId) return ''
+  return `results/${userId}/${jobId}/final.${finalExtension(options)}`
 }
 
 function metadataFromResponse(data) {
@@ -195,33 +200,39 @@ export function ProcessingPage() {
   }
 
   async function pollFinalOutput(jobId, options) {
-    const expectedKey = finalOutputKey(jobId, options)
-    if (!expectedKey) return
+    const candidateKeys = [
+      resultOutputKey(user?.id, jobId, options),
+      processedOutputKey(jobId, options),
+    ].filter(Boolean)
 
-    appendLog('INFO', `Fallback watcher armed for ${expectedKey}`)
+    if (candidateKeys.length === 0) return
+
+    appendLog('INFO', `Fallback watcher armed for ${candidateKeys[0]}`)
 
     for (let attempt = 1; attempt <= fallbackPollLimit; attempt += 1) {
       await new Promise((resolve) => setTimeout(resolve, fallbackPollDelay))
 
-      try {
-        const data = await getProcessedImageDownloadUrl({ accessToken, s3Key: expectedKey })
-        const signedUrl = data.data.url
+      for (const key of candidateKeys) {
+        try {
+          const data = await getProcessedImageDownloadUrl({ accessToken, s3Key: key })
+          const signedUrl = data.data.url
 
-        setOutputUrl(signedUrl)
-        setJobMeta((current) => current.outputKey
-          ? current
-          : { ...current, outputKey: expectedKey })
-        setStages((current) => current.map((stage) => (
-          stage.status === 'pending' || stage.status === 'running'
-            ? { ...stage, status: 'done', detail: 'Completed' }
-            : stage
-        )))
-        setNotice('Pipeline hoan tat. Output da san sang de export.')
-        appendLog('DONE', `Final output detected: ${expectedKey}`)
-        return
-      } catch {
-        if (attempt === 1) {
-          appendLog('SYNC', 'Waiting for final S3 object...')
+          setOutputUrl(signedUrl)
+          setJobMeta((current) => current.outputKey
+            ? current
+            : { ...current, outputKey: key })
+          setStages((current) => current.map((stage) => (
+            stage.status === 'pending' || stage.status === 'running'
+              ? { ...stage, status: 'done', detail: 'Completed' }
+              : stage
+          )))
+          setNotice('Pipeline hoan tat. Output da duoc luu tren S3 va san sang export.')
+          appendLog('DONE', `Final output detected: ${key}`)
+          return
+        } catch {
+          if (attempt === 1 && key === candidateKeys[0]) {
+            appendLog('SYNC', 'Waiting for final S3 object...')
+          }
         }
       }
     }

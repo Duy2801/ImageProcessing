@@ -199,8 +199,15 @@ router.post('/download-url', requireAuth, async (req, res, next) => {
       return res.status(400).json({ success: false, error: 's3Key is required' });
     }
 
-    if (!s3Key.startsWith('processed/')) {
-      return res.status(403).json({ success: false, error: 'Only processed images can be exported' });
+    const isProcessedKey = s3Key.startsWith('processed/');
+    const userResultPrefix = `results/${req.user.id}/`;
+    const isOwnResultKey = s3Key.startsWith(userResultPrefix);
+
+    if (!isProcessedKey && !isOwnResultKey) {
+      return res.status(403).json({
+        success: false,
+        error: 'Only processed images or your own stored results can be exported',
+      });
     }
 
     await s3.send(new HeadObjectCommand({

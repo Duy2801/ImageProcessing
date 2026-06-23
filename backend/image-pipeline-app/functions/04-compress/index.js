@@ -59,6 +59,7 @@ exports.handler = async (event) => {
 
     const inputLocalPath = `/tmp/${jobId}-compress-input${inputExt}`;
     const outputLocalKey = `processed/${jobId}/final${ext}`;
+    const resultStorageKey = `results/${userId}/${jobId}/final${ext}`;
     const outputLocalPath = `/tmp/${jobId}-compress-output${ext}`;
 
     try {
@@ -116,6 +117,10 @@ exports.handler = async (event) => {
       logger.info("Uploading final compressed file to S3", { outputLocalKey });
       const contentType = `image/${format}`;
       await uploadFile(s3Bucket, outputLocalKey, outputLocalPath, contentType);
+      logger.info("Uploading final image to user result storage", {
+        resultStorageKey,
+      });
+      await uploadFile(s3Bucket, resultStorageKey, outputLocalPath, contentType);
 
       // 4. Update logs and finish pipeline
       const duration = Date.now() - startTime;
@@ -133,7 +138,9 @@ exports.handler = async (event) => {
         imageId,
         userId,
         metadata: {
-          s3Key: outputLocalKey,
+          s3Key: resultStorageKey,
+          processedKey: outputLocalKey,
+          resultKey: resultStorageKey,
           width: newMeta.width,
           height: newMeta.height,
           format: format,
@@ -150,7 +157,9 @@ exports.handler = async (event) => {
         imageId,
         userId,
         metadata: {
-          s3Key: outputLocalKey,
+          s3Key: resultStorageKey,
+          processedKey: outputLocalKey,
+          resultKey: resultStorageKey,
           width: newMeta.width,
           height: newMeta.height,
           format: format,

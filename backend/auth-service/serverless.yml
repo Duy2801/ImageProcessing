@@ -35,6 +35,7 @@ provider:
           Resource:
             - !Sub arn:aws:s3:::image-pipeline-bucket-${self:provider.stage}-${AWS::AccountId}/originals/*
             - !Sub arn:aws:s3:::image-pipeline-bucket-${self:provider.stage}-${AWS::AccountId}/processed/*
+            - !Sub arn:aws:s3:::image-pipeline-bucket-${self:provider.stage}-${AWS::AccountId}/results/*
         - Effect: Allow
           Action:
             - lambda:InvokeFunction
